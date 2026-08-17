@@ -15,11 +15,36 @@ then P2 governance, P3 single Langflow agent (HF Space), P4 broker+monitoring.
 Langflow now hosts ONE agent, not 3. Railway trial OOMs Langflow → use **HF Spaces**
 (files in `langflow-space/`). The section below is the SUPERSEDED v1 plan.
 
-## 👉 START HERE TOMORROW
-**Build the 3 Langflow agents.** Follow **`docs/langflow-build-guide.md`** step by step.
-First action: get **Langflow (≥1.11) running publicly on Railway** (guide Step 0), then
-register the 2 MCP servers and build the flows. When done, collect the **3 agent-card
-URLs** and give them to Claude to wire into the broker.
+## 👉 START HERE (resume 2026-08-17)
+
+**Backend is DONE.** All 3 MCPs built + deployed to CloudHub + smoke-tested + on GitHub;
+`casino_demo` (v3, 17 tables) live on Aiven and verified healthy (baseline = only LYNN-ALEX01).
+
+**Decision (2026-08-16): drop Langflow.** The itinerary agent will be a **native Agent
+Fabric / MuleSoft agent** (AI-Inference connector LLM loop + MCP client over the 3 MCP
+servers, exposed via A2A), NOT Langflow — to showcase Agent Fabric's own agentic
+capability. HF Space / Langflow no longer needed.
+
+**NEXT = P3:** build+deploy the native itinerary agent in MuleSoft Vibes. The paste-ready
+Vibes prompt was provided in chat (app name `lynn-itinerary-agent`, model claude-sonnet-4-6,
+3 MCP tool clients, A2A exposure, orchestrator system prompt). When deployed, grab the
+**A2A agent-card URL** + `POST /chat` URL → Claude runs the hero-prompt smoke test.
+
+**Then P4:** set `lynn-concierge-broker/exchange.json` (`itineraryAgent.url` = agent card,
+`ingressgw.url`, anthropic/openai) → deploy broker → point `agent-broker-ui` at it → e2e.
+**P2 governance** (Flex/Omni Gateway OAuth2 + Exchange/Agent Registry + Agent Visualizer)
+layers on after.
+
+### MCP server URLs (CloudHub, all on casino_demo, POST /mcp)
+- MCP-A `https://lynn-resort-systems-esulje.2tku8l.usa-e1.cloudhub.io/mcp`
+- MCP-B `https://lynn-interests-esulje.2tku8l.usa-e1.cloudhub.io/mcp`
+- MCP-C `https://lynn-casino-gaming-esulje.2tku8l.usa-e1.cloudhub.io/mcp`
+
+### Known non-blocking nits
+- MCP-A `getReservation` 404 returns generic `{"status":"error"}` not clean not-found.
+- MCP-C TIME fields still serialize with a `1970-01-01` prefix.
+
+_(The Langflow-based plan below is SUPERSEDED — kept for history.)_
 
 ## Architecture
 ```
