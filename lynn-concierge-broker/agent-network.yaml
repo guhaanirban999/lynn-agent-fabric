@@ -1,0 +1,108 @@
+schemaVersion: 1.0.0
+label: "Lynn Concierge Broker"
+brokers:
+  lynn-concierge-broker:
+    card:
+      protocolVersion: 0.3.0
+      name: Lynn Concierge Broker
+      description: Personal concierge for Lynn Las Vegas. Orchestrates rooms & suites, dining, and casino/gaming host agents based on the guest's request.
+      url: ${ingressgw.url}/lynn-concierge-broker
+      capabilities:
+        pushNotifications: false
+      version: 1.0.0
+      defaultInputModes:
+        - text/plain
+      defaultOutputModes:
+        - text/plain
+      skills:
+        - id: lynn-concierge
+          name: Lynn Concierge
+          description: Books rooms/suites, dining, gaming tables, or a full itinerary across the resort and casino.
+          examples:
+            - Book me an Encore Tower Suite for Sep 19-21 for 2 guests
+            - I'd like a table at SW Steakhouse on Saturday night for 4
+            - I'm a Black Card member, reserve a high-limit baccarat table for Saturday
+            - Anniversary weekend - suite, dinner at SW Steakhouse, and a baccarat table
+          inputModes:
+            - text/plain
+          outputModes:
+            - text/plain
+          tags:
+            - hospitality
+            - gaming
+            - concierge
+            - booking
+    spec:
+      llm:
+        ref:
+          name: openai
+        configuration:
+          model: gpt-5.4-mini
+      instructions:
+        - "You are the Lynn Las Vegas Concierge Broker. Help guests book rooms & suites, dining, casino gaming tables, or a full itinerary from their natural-language requests."
+        - "If the request is only about a room, suite, or accommodation, use only the rooms agent."
+        - "If the request is only about dining, a restaurant, or a table to eat, use only the dining agent."
+        - "If the request is only about gaming, a casino table, comps, or Lynn Rewards, use only the gaming host agent."
+        - "If the request spans more than one of these (or says 'weekend', 'itinerary', 'plan my stay'), use every relevant agent."
+        - "Extract the guest identity (name or Lynn Rewards ID), dates/times, and party size, and pass them to the agents so bookings can be tied to the guest."
+        - "After completing all bookings, provide a single clear itinerary summary with each confirmation, date, and price or comp."
+      links:
+        - agent:
+            ref:
+              name: roomsAgent
+        - agent:
+            ref:
+              name: diningAgent
+        - agent:
+            ref:
+              name: gamingHostAgent
+agents:
+  roomsAgent:
+    label: Rooms & Suites Agent
+    metadata:
+      protocol: a2a
+      platform: Other
+  diningAgent:
+    label: Dining Agent
+    metadata:
+      protocol: a2a
+      platform: Other
+  gamingHostAgent:
+    label: Casino / Gaming Host Agent
+    metadata:
+      protocol: a2a
+      platform: Other
+llmProviders:
+  openai:
+    label: OpenAI
+    description: OpenAI GPT models via OpenAI API
+    metadata:
+      platform: OpenAI
+connections:
+  roomsAgentConnection:
+    kind: agent
+    ref:
+      name: roomsAgent
+    spec:
+      url: ${roomsAgent.url}
+  diningAgentConnection:
+    kind: agent
+    ref:
+      name: diningAgent
+    spec:
+      url: ${diningAgent.url}
+  gamingHostAgentConnection:
+    kind: agent
+    ref:
+      name: gamingHostAgent
+    spec:
+      url: ${gamingHostAgent.url}
+  openaiLlmConn:
+    kind: llm
+    ref:
+      name: openai
+    spec:
+      url: ${openai.url}
+      configuration:
+        apiKey: ${openai.apiKey}
+        timeout: 600000

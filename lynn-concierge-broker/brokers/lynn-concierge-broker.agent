@@ -1,0 +1,243 @@
+# @dialect: AGENTFABRIC=0.1
+
+system:
+  instructions: "You are the Lynn Las Vegas Concierge Broker. You help guests book rooms & suites, dining, casino gaming tables, or a full itinerary. You classify what the guest needs and delegate to the appropriate agents, then compile a single itinerary."
+
+config:
+  agent_name: "lynn-concierge-broker"
+  default_llm: @llm.openai
+
+llm:
+  openai:
+    target: "llm://openaiLlmConnection"
+    kind: "OpenAI"
+    model: "gpt-4.1"
+
+
+# -- ACTION DEFINITIONS -------------------------------------------------------
+
+actions:
+  rooms_agent:
+    target: "a2a://roomsAgentConnection"
+    kind: "a2a:send_message"
+
+  dining_agent:
+    target: "a2a://diningAgentConnection"
+    kind: "a2a:send_message"
+
+  gaming_host_agent:
+    target: "a2a://gamingHostAgentConnection"
+    kind: "a2a:send_message"
+
+
+# -- TRIGGER ------------------------------------------------------------------
+
+trigger conciergeTrigger:
+  kind: "a2a"
+  target: "brokers://lynn-concierge-broker/a2a"
+  on_message: ->
+    transition to @generator.classifyRequest
+
+
+# -- CLASSIFY REQUEST ---------------------------------------------------------
+
+generator classifyRequest:
+  description: "Classifies the concierge request to determine which services the guest needs."
+  label: "Classify Request"
+  llm: @llm.openai
+  system:
+    instructions: |
+      Classify the Lynn Las Vegas concierge request to determine which services the guest needs.
+
+      Set request_type to:
+      - "rooms_only" when the guest mentions only a room, suite, or accommodation — with no dining or gaming.
+      - "dining_only" when the guest mentions only a restaurant, dinner, or a table to eat — with no room or gaming.
+      - "gaming_only" when the guest mentions only a casino table, gaming, comps, or Lynn Rewards — with no room or dining.
+      - "multi" when the guest mentions more than one of the above, or uses phrases like "weekend", "itinerary", "plan my stay", "anniversary".
+
+      Also extract:
+      - guest_identifier: the guest's name or Lynn Rewards ID (e.g. "LR-100002"). Default to "not specified" if missing.
+      - dates: any check-in/check-out or reservation dates/times mentioned. Default to "not specified" if missing.
+      - party_size: number of guests/people if mentioned. Default to "not specified" if missing.
+      - original_request: copy the guest's message verbatim.
+  prompt: ->
+    | {!@request.payload.message.parts[0].text}
+  outputs:
+    properties:
+      request_type:
+        type: "string"
+        description: "The type of concierge request"
+        enum:
+          - "rooms_only"
+          - "dining_only"
+          - "gaming_only"
+          - "multi"
+      guest_identifier:
+        type: "string"
+        description: "Guest name or Lynn Rewards ID"
+      dates:
+        type: "string"
+        description: "Dates/times mentioned"
+      party_size:
+        type: "string"
+        description: "Party size mentioned"
+      original_request:
+        type: "string"
+        description: "The original guest request verbatim"
+  on_exit: ->
+    transition to @router.conciergeRouter
+
+
+# -- CONCIERGE ROUTER ---------------------------------------------------------
+
+router conciergeRouter:
+  description: "Routes to the appropriate path based on request classification."
+  routes:
+    - target: @subagent.bookRooms
+      when: @generator.classifyRequest.output.request_type == "rooms_only"
+      label: "Rooms Only"
+    - target: @subagent.bookDining
+      when: @generator.classifyRequest.output.request_type == "dining_only"
+      label: "Dining Only"
+    - target: @subagent.bookGaming
+      when: @generator.classifyRequest.output.request_type == "gaming_only"
+      label: "Gaming Only"
+  otherwise:
+    target: @orchestrator.planStay
+
+
+# -- ROOMS ONLY PATH ----------------------------------------------------------
+
+subagent bookRooms:
+  description: "Books a room/suite using the Rooms & Suites Agent."
+  label: "Book Rooms"
+  llm: @llm.openai
+  system:
+    instructions: |
+      You are coordinating a room/suite booking at Lynn Las Vegas.
+      Use the rooms agent to complete the booking described in the guest's request.
+      Pass all relevant details: guest identifier, dates, party size, and the full original request.
+      Once booked, set summary to the confirmation details returned by the agent.
+      If the agent cannot complete the booking, set summary to a clear explanation of what is missing.
+  reasoning:
+    instructions: ->
+      | Book a room/suite for this request: {!@generator.classifyRequest.output.original_request}. Guest: {!@generator.classifyRequest.output.guest_identifier}. Dates: {!@generator.classifyRequest.output.dates}. Party size: {!@generator.classifyRequest.output.party_size}
+    actions:
+      book_rooms: @actions.rooms_agent
+    max_number_of_loops: 3
+    outputs:
+      properties:
+        summary:
+          type: "string"
+          description: "Room booking confirmation summary"
+  on_exit: ->
+    transition to @echo.roomsResponse
+
+echo roomsResponse:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_COMPLETED"
+  message: a2a.message({messageId: uuid(), parts: [a2a.textPart("Room booking completed. " + @subagent.bookRooms.output.summary)]})
+
+
+# -- DINING ONLY PATH ---------------------------------------------------------
+
+subagent bookDining:
+  description: "Books a dining reservation using the Dining Agent."
+  label: "Book Dining"
+  llm: @llm.openai
+  system:
+    instructions: |
+      You are coordinating a dining reservation at Lynn Las Vegas.
+      Use the dining agent to complete the reservation described in the guest's request.
+      Pass all relevant details: guest identifier, date/time, party size, and the full original request.
+      Once booked, set summary to the confirmation details returned by the agent.
+      If the agent cannot complete the reservation, set summary to a clear explanation of what is missing.
+  reasoning:
+    instructions: ->
+      | Book dining for this request: {!@generator.classifyRequest.output.original_request}. Guest: {!@generator.classifyRequest.output.guest_identifier}. Dates: {!@generator.classifyRequest.output.dates}. Party size: {!@generator.classifyRequest.output.party_size}
+    actions:
+      book_dining: @actions.dining_agent
+    max_number_of_loops: 3
+    outputs:
+      properties:
+        summary:
+          type: "string"
+          description: "Dining reservation confirmation summary"
+  on_exit: ->
+    transition to @echo.diningResponse
+
+echo diningResponse:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_COMPLETED"
+  message: a2a.message({messageId: uuid(), parts: [a2a.textPart("Dining reservation completed. " + @subagent.bookDining.output.summary)]})
+
+
+# -- GAMING ONLY PATH ---------------------------------------------------------
+
+subagent bookGaming:
+  description: "Handles gaming table reservations, Lynn Rewards, and comps using the Casino / Gaming Host Agent."
+  label: "Book Gaming"
+  llm: @llm.openai
+  system:
+    instructions: |
+      You are coordinating a casino/gaming request at Lynn Las Vegas.
+      Use the gaming host agent to look up the guest's Lynn Rewards tier when relevant, reserve a table, and evaluate/issue comps as appropriate.
+      Pass all relevant details: guest identifier, date/time, party size, and the full original request.
+      Once done, set summary to the confirmation details returned by the agent.
+      If the agent cannot complete the request, set summary to a clear explanation of what is missing.
+  reasoning:
+    instructions: ->
+      | Handle this gaming request: {!@generator.classifyRequest.output.original_request}. Guest: {!@generator.classifyRequest.output.guest_identifier}. Dates: {!@generator.classifyRequest.output.dates}. Party size: {!@generator.classifyRequest.output.party_size}
+    actions:
+      book_gaming: @actions.gaming_host_agent
+    max_number_of_loops: 3
+    outputs:
+      properties:
+        summary:
+          type: "string"
+          description: "Gaming/comp confirmation summary"
+  on_exit: ->
+    transition to @echo.gamingResponse
+
+echo gamingResponse:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_COMPLETED"
+  message: a2a.message({messageId: uuid(), parts: [a2a.textPart("Gaming request completed. " + @subagent.bookGaming.output.summary)]})
+
+
+# -- MULTI: FULL ITINERARY PATH -----------------------------------------------
+
+orchestrator planStay:
+  description: "Plans a full stay using the rooms, dining, and gaming host agents as needed."
+  label: "Plan Stay (Rooms + Dining + Gaming)"
+  llm: @llm.openai
+  system:
+    instructions: |
+      You are coordinating a complete Lynn Las Vegas itinerary that may span rooms, dining, and gaming.
+      Step 1: If the guest is identified, note their Lynn Rewards identifier so agents can tie bookings to the guest.
+      Step 2: Book the room/suite via the rooms agent if the request includes lodging.
+      Step 3: Book the dining reservation via the dining agent if the request includes dining.
+      Step 4: Handle the gaming table and any comps via the gaming host agent if the request includes gaming.
+      Step 5: Compile a single itinerary summary with each confirmation (id, date, price or comp).
+      Complete every applicable booking before returning. If one fails, include the error in the summary and complete the others.
+  reasoning:
+    instructions: ->
+      | Plan this stay: {!@generator.classifyRequest.output.original_request}. Guest: {!@generator.classifyRequest.output.guest_identifier}. Dates: {!@generator.classifyRequest.output.dates}. Party size: {!@generator.classifyRequest.output.party_size}
+    actions:
+      book_rooms: @actions.rooms_agent
+      book_dining: @actions.dining_agent
+      book_gaming: @actions.gaming_host_agent
+    max_number_of_loops: 6
+    task_timeout_secs: 180
+    outputs:
+      properties:
+        summary:
+          type: "string"
+          description: "Combined itinerary confirmation summary"
+  on_exit: ->
+    transition to @echo.itineraryResponse
+
+echo itineraryResponse:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_COMPLETED"
+  message: a2a.message({messageId: uuid(), parts: [a2a.textPart("Your Lynn Las Vegas itinerary is confirmed. " + @orchestrator.planStay.output.summary)]})

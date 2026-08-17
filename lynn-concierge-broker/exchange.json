@@ -1,0 +1,57 @@
+{
+  "main": "agent-network.yaml",
+  "name": "lynn-concierge-broker-network",
+  "classifier": "agent-network",
+  "organizationId": "bd24f01a-ad0a-454e-93cc-28a98abdcf2c",
+  "descriptorVersion": "1.0.0",
+  "tags": [],
+  "metadata": {
+    "variables": {
+      "ingressgw": {
+        "url": {
+          "description": "Ingress gateway URL",
+          "default": "",
+          "secret": false
+        }
+      },
+      "openai": {
+        "url": {
+          "description": "OpenAI API base URL (e.g. https://api.openai.com/v1)",
+          "default": "",
+          "secret": false
+        },
+        "apiKey": {
+          "description": "OpenAI API key (sk-proj-...)",
+          "default": "",
+          "secret": false
+        }
+      },
+      "roomsAgent": {
+        "url": {
+          "description": "Rooms & Suites Agent A2A endpoint URL (Langflow /api/v1/a2a/{flow_id})",
+          "default": "",
+          "secret": false
+        }
+      },
+      "diningAgent": {
+        "url": {
+          "description": "Dining Agent A2A endpoint URL (Langflow /api/v1/a2a/{flow_id})",
+          "default": "",
+          "secret": false
+        }
+      },
+      "gamingHostAgent": {
+        "url": {
+          "description": "Casino / Gaming Host Agent A2A endpoint URL (Langflow /api/v1/a2a/{flow_id})",
+          "default": "",
+          "secret": false
+        }
+      }
+    }
+  },
+  "apiVersion": "v1.0",
+  "dependencies": [],
+  "groupId": "bd24f01a-ad0a-454e-93cc-28a98abdcf2c",
+  "assetId": "lynn-concierge-broker-network",
+  "version": "1.0.0"
+}
