@@ -391,3 +391,33 @@ Direct MCP confirmation: `getOfferings{category_code:null}` → **9 items** (was
 - Agent suite: happy path `LR-100002` **5/5 COMPLETED**, confirmation code `LYNN-ALEX01` **2/2 COMPLETED**, **0/7 runs leaked 21+**. No regression.
 
 **FINAL STATE: all three fixes deployed & verified — happy path 100%, confirmation code 100%, `-32602` gone, 0 "no response node" crashes, age-gate fail-closed, 0 governance leaks.**
+
+---
+
+## 13. Demo-ready confirmation (2026-08-18)
+
+Final single-shot demo run against the live broker, exactly as it would be driven from the Railway agent-broker-ui.
+
+**Broker URL (paste into the Railway front-end):**
+`https://lynn-demo-gw-0m6hw6.5sc6y6-1.usa-e2.cloudhub.io/lynn_itinerary_agent/`
+
+**Request:**
+```bash
+curl -s https://lynn-demo-gw-0m6hw6.5sc6y6-1.usa-e2.cloudhub.io/lynn_itinerary_agent/ \
+  -H "Content-Type: application/json" -H "A2A-Version: 1.0" \
+  -d '{"jsonrpc":"2.0","id":"demo","method":"SendMessage","params":{"message":{
+        "messageId":"demo1","role":"ROLE_USER",
+        "parts":[{"text":"Create a personalized resort itinerary for my stay. My reservation confirmation is LYNN-ALEX01. Include dining, entertainment, and any offers I'\''m eligible for."}]}}}'
+```
+
+**Response:** `state = TASK_STATE_COMPLETED` (task `e551cf8e…`, context `52570cd4…`)
+```
+Welcome to Your Luxurious Escape, Alex Carter!  (Black tier)
+Sep 19: 16:00 Arrival (high-floor connecting rooms, traveling with child) ·
+        19:00 Le Rêve — The Dream (2-for-1) · 20:00 SW Steakhouse Dinner
+Sep 20: 10:00–18:00 Encore Beach Club Daybed · 14:00 Esplanade Shopping
+Sep 21: 07:00 Grand Canyon Helicopter Tour · 11:00 Bottega Luxe Personal Shopping
+Offers: $500 Black Dining Credit (BLKDINE) · Show Ticket 2-for-1 (SHOW2)
+```
+
+Confirms end-to-end: confirmation-code input resolves (`LYNN-ALEX01` → Alex Carter), Black-tier personalization + real offers, family-aware, and **0 age-restricted (21+) offers** for the minor-present party (governance fail-closed holds).
