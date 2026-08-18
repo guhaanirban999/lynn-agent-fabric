@@ -8,7 +8,13 @@ End-to-end verified: **happy path 100%, confirmation code 100%, no `-32602`, no 
 age-gate fail-closed, 0 governance leaks.** Full write-up: **`docs/LYNN-ITINERARY-AGENT-TEST-REPORT.md`**.
 
 - **Broker URL (paste into `agent-broker-ui`):** `https://lynn-demo-gw-0m6hw6.5sc6y6-1.usa-e2.cloudhub.io/lynn_itinerary_agent/`
-  (agent card at `…/.well-known/agent-card.json`; A2A needs header `A2A-Version: 1.0` + method `SendMessage`).
+  (agent card at `…/.well-known/agent-card.json`). Raw A2A is v1.0 gRPC (`A2A-Version: 1.0` + `SendMessage`),
+  but the gateway now bridges this transparently — see next bullet.
+- **A2A transport bridge (2026-08-18):** the endpoint now serves **both** legacy A2A v0.3 JSON-RPC clients
+  (the Railway `agent-broker-ui`: `message/send`) **and** native v1.0 gRPC clients on the **same URL** — no UI
+  change needed. Three Flex Gateway policies do it (header-injection + onRequest/onResponse DataWeave transforms).
+  Docs, DW scripts, architecture diagram, and an idempotent **re-apply script (run after every broker redeploy)**
+  live in **`lynn-itinerary-agent/gateway-a2a-bridge/`** (see `POLICY-CHANGES.md`).
 - **Demo prompt:** "Create a personalized resort itinerary for my stay. My reservation confirmation is
   LYNN-ALEX01. Include dining, entertainment, and any offers I'm eligible for." (or player id `LR-100002`).
 - **What it shows:** Alex Carter (Black tier) · family-aware (minor in party) · $500 BLKDINE + 2-for-1 Le Rêve
