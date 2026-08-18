@@ -1,0 +1,47 @@
+{
+  "main": "agent-network.yaml",
+  "name": "lynn-itinerary-network",
+  "classifier": "agentic-network",
+  "organizationId": "0f5adde5-0f81-487e-86c2-bc6d1a967ab6",
+  "descriptorVersion": "1.0.0",
+  "tags": [
+    "agentscript"
+  ],
+  "metadata": {
+    "variables": {
+      "openai": {
+        "apiKey": {
+          "description": "OpenAI API key",
+          "default": "",
+          "secret": true
+        }
+      },
+      "lynnResortSystems": {
+        "url": {
+          "description": "Lynn Resort Systems MCP server URL (rooms, dining, reservation context)",
+          "default": "https://lynn-resort-systems-esulje.2tku8l.usa-e1.cloudhub.io",
+          "secret": false
+        }
+      },
+      "lynnInterests": {
+        "url": {
+          "description": "Lynn Interests MCP server URL (entertainment interests)",
+          "default": "https://lynn-interests-esulje.2tku8l.usa-e1.cloudhub.io",
+          "secret": false
+        }
+      },
+      "lynnCasinoGaming": {
+        "url": {
+          "description": "Lynn Casino Gaming MCP server URL (casino & partner offers)",
+          "default": "https://lynn-casino-gaming-esulje.2tku8l.usa-e1.cloudhub.io",
+          "secret": false
+        }
+      }
+    }
+  },
+  "apiVersion": "v1.0",
+  "dependencies": [],
+  "groupId": "0f5adde5-0f81-487e-86c2-bc6d1a967ab6",
+  "assetId": "lynn-itinerary-network",
+  "version": "1.0.0"
+}

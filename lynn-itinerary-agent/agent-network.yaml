@@ -1,0 +1,83 @@
+agentNetwork: 2.0.0
+info:
+  label: "Lynn Itinerary Agent Network"
+  version: v1
+registry:
+  mcps:
+    resortSystemsMcp:
+      info:
+        label: Lynn Resort Systems
+      metadata:
+        transport:
+          kind: streamableHttp
+          path: /mcp
+    entertainmentInterestsMcp:
+      info:
+        label: Lynn Interests
+      metadata:
+        transport:
+          kind: streamableHttp
+          path: /mcp
+    casinoPartnerOffersMcp:
+      info:
+        label: Lynn Casino Gaming
+      metadata:
+        transport:
+          kind: streamableHttp
+          path: /mcp
+  llms:
+    gpt4oOpenAiLlm:
+      info:
+        label: GPT-4o
+      metadata:
+        platform: OpenAI
+context:
+  connections:
+    lynn_resort_systems_connection:
+      kind: mcp
+      ref:
+        name: resortSystemsMcp
+      url: ${lynnResortSystems.url}
+    lynn_interests_connection:
+      kind: mcp
+      ref:
+        name: entertainmentInterestsMcp
+      url: ${lynnInterests.url}
+    lynn_casino_gaming_connection:
+      kind: mcp
+      ref:
+        name: casinoPartnerOffersMcp
+      url: ${lynnCasinoGaming.url}
+    openai_connection:
+      kind: llm
+      ref:
+        name: gpt4oOpenAiLlm
+      url: https://api.openai.com/v1
+      authentication:
+        kind: apiKey
+        apiKey: ${openai.apiKey}
+brokers:
+  lynn_itinerary_agent:
+    kind: AgentScript
+    implementation: ./brokers/lynn-itinerary-agent.agent
+    interfaces:
+      a2a:
+        card:
+          name: Lynn Itinerary Agent
+          description: Creates personalized resort itineraries by coordinating guest profiles, entertainment interests, and casino & gaming offers for Lynn.
+          version: 1.0.0
+          capabilities:
+            streaming: false
+            pushNotifications: false
+          defaultInputModes:
+            - text/plain
+          defaultOutputModes:
+            - text/plain
+          skills:
+            - id: itinerary-planning
+              name: Personalized Resort Itinerary Planning
+              description: Generates a personalized resort itinerary based on the guest's reservation, interests, and available offers.
+              tags:
+                - itinerary
+                - resort
+                - personalization

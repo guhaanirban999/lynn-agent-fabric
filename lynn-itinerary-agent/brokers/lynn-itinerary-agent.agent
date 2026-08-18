@@ -1,0 +1,253 @@
+# @dialect: AGENTFABRIC=1.0
+
+system:
+  instructions: "You are a personalized resort itinerary planning agent for Lynn guests. You coordinate guest profile data, entertainment interests, and casino & resort offers to create tailored, conflict-free itinerary recommendations."
+
+config:
+  agent_name: "lynn-itinerary-agent"
+  default_llm: @llm.openai_gpt4o
+
+llm:
+  openai_gpt4o:
+    target: "llm://openai_connection"
+    kind: "OpenAI"
+    model: "gpt-4o"
+
+
+# -- ACTION DEFINITIONS -------------------------------------------------------
+
+actions:
+  # Lynn Resort Systems — read-only context tools
+  check_consent:
+    target: "mcp://lynn_resort_systems_connection"
+    kind: "mcp:tool"
+    tool_name: "checkConsent"
+
+  get_guest_profile:
+    target: "mcp://lynn_resort_systems_connection"
+    kind: "mcp:tool"
+    tool_name: "getGuestProfile"
+
+  get_reservation:
+    target: "mcp://lynn_resort_systems_connection"
+    kind: "mcp:tool"
+    tool_name: "getReservation"
+
+  get_schedule_constraints:
+    target: "mcp://lynn_resort_systems_connection"
+    kind: "mcp:tool"
+    tool_name: "getScheduleConstraints"
+
+  # Lynn Interests — read-only interest tools
+  get_interests:
+    target: "mcp://lynn_interests_connection"
+    kind: "mcp:tool"
+    tool_name: "getInterests"
+
+  get_inferred_interests:
+    target: "mcp://lynn_interests_connection"
+    kind: "mcp:tool"
+    tool_name: "getInferredInterests"
+
+  # Casino Gaming MCP — read-only offer tools
+  get_eligible_offers:
+    target: "mcp://lynn_casino_gaming_connection"
+    kind: "mcp:tool"
+    tool_name: "getEligibleOffers"
+
+  get_offerings:
+    target: "mcp://lynn_casino_gaming_connection"
+    kind: "mcp:tool"
+    tool_name: "getOfferings"
+
+
+# -- TRIGGER ------------------------------------------------------------------
+
+trigger itineraryTrigger:
+  kind: "a2a"
+  target: "brokers://lynn_itinerary_agent/a2a"
+  on_message: ->
+    transition to @subagent.resolveGuest
+
+
+# -- PHASE 0: RESOLVE GUEST IDENTITY ------------------------------------------
+
+subagent resolveGuest:
+  description: "Resolves player_id and confirmation_code from the request, and retrieves the guest's reservation."
+  label: "Resolve Guest"
+  llm: @llm.openai_gpt4o
+  system:
+    instructions: |
+      You resolve the guest's identity and retrieve their reservation details. Follow these steps:
+
+      1. Extract the player_id and/or confirmation_code from the request message.
+      2. Call getReservation using whichever identifier is available (player_id or confirmation_code) to retrieve the guest's stay details and resolve both identifiers.
+      3. Return the resolved player_id, confirmation_code, and a summary of the reservation (check-in/out dates, room type, dining reservations).
+
+      If neither player_id nor confirmation_code can be found in the request, output empty strings for both and set stay_summary to "UNRESOLVED".
+      Always populate all three output fields — never leave them null.
+  reasoning:
+    instructions: ->
+      | {!@request.payload.message.parts[0].text}
+    actions:
+      get_reservation: @actions.get_reservation
+    max_number_of_loops: 3
+    task_timeout_secs: 15
+    outputs:
+      properties:
+        player_id:
+          type: "string"
+          description: "Resolved guest player ID (empty string if unresolvable)"
+        confirmation_code:
+          type: "string"
+          description: "Resolved reservation confirmation code (empty string if unresolvable)"
+        stay_summary:
+          type: "string"
+          description: "Reservation summary including check-in/out dates and room type, or UNRESOLVED"
+  on_exit: ->
+    transition to @router.identityRouter
+
+
+# -- IDENTITY CHECK ROUTER ----------------------------------------------------
+
+router identityRouter:
+  description: "Routes to fallback if guest identity could not be resolved."
+  routes:
+    - target: @echo.fallbackResponse
+      when: @subagent.resolveGuest.output.stay_summary == "UNRESOLVED"
+      label: "Unresolved Identity"
+  otherwise:
+    target: @subagent.guestContext
+
+
+# -- PHASE 1: GUEST CONTEXT ---------------------------------------------------
+
+subagent guestContext:
+  description: "Gathers guest consent status, profile, and entertainment interests."
+  label: "Guest Context"
+  llm: @llm.openai_gpt4o
+  system:
+    instructions: |
+      You gather foundational guest context to support personalized itinerary planning. Follow these steps in order:
+
+      1. Call checkConsent with the player_id ({!@subagent.resolveGuest.output.player_id}) to retrieve the guest's active consent scopes.
+      2. Call getGuestProfile with the player_id to retrieve the guest's comp tier, preferences, and masked PII (within consent limits).
+      3. Call getInterests with the player_id to retrieve explicitly stated entertainment interests.
+      4. Call getInferredInterests with the player_id to retrieve affinity-based interests derived from behaviour.
+
+      Do not retrieve data outside the consent scopes returned in step 1.
+      Summarize all gathered data into the structured output fields.
+  reasoning:
+    instructions: ->
+      | {!@request.payload.message.parts[0].text}
+    actions:
+      check_consent: @actions.check_consent
+      get_guest_profile: @actions.get_guest_profile
+      get_interests: @actions.get_interests
+      get_inferred_interests: @actions.get_inferred_interests
+    max_number_of_loops: 8
+    task_timeout_secs: 30
+    outputs:
+      properties:
+        consent_scopes:
+          type: "string"
+          description: "Comma-separated list of granted consent scopes"
+        guest_tier:
+          type: "string"
+          description: "Guest comp tier (e.g. Gold, Platinum)"
+        interests_summary:
+          type: "string"
+          description: "Combined summary of explicit and inferred entertainment interests"
+  on_exit: ->
+    transition to @subagent.itineraryBuilder
+
+
+# -- PHASE 2: ITINERARY BUILDER -----------------------------------------------
+
+subagent itineraryBuilder:
+  description: "Gathers schedule constraints and personalised casino & resort offers."
+  label: "Itinerary Builder"
+  llm: @llm.openai_gpt4o
+  system:
+    instructions: |
+      You gather the scheduling and offer context needed to build a conflict-free personalized itinerary. Follow these steps in order:
+
+      Guest context already gathered:
+      - Player ID: {!@subagent.resolveGuest.output.player_id}
+      - Confirmation code: {!@subagent.resolveGuest.output.confirmation_code}
+      - Guest tier: {!@subagent.guestContext.output.guest_tier}
+      - Interests: {!@subagent.guestContext.output.interests_summary}
+
+      1. Call getScheduleConstraints using the player_id to identify pre-booked events and time blocks that must not be overridden.
+      2. Call getEligibleOffers using the player_id and confirmation_code to retrieve tier-matched promotions and personalized offers.
+      3. Call getOfferings to retrieve the full catalogue of bookable resort and casino activities.
+
+      Cross-reference the schedule constraints from step 1 against the offerings from steps 2 and 3.
+      Exclude any offering that conflicts with an existing constraint.
+      Summarize available time slots and matched offers in the structured output fields.
+  reasoning:
+    instructions: ->
+      | {!@request.payload.message.parts[0].text}
+    actions:
+      get_schedule_constraints: @actions.get_schedule_constraints
+      get_eligible_offers: @actions.get_eligible_offers
+      get_offerings: @actions.get_offerings
+    max_number_of_loops: 8
+    task_timeout_secs: 45
+    outputs:
+      properties:
+        schedule_constraints:
+          type: "string"
+          description: "List of pre-booked events and blocked time slots"
+        eligible_offers:
+          type: "string"
+          description: "Personalized tier-matched promotions and eligible offers"
+        available_offerings:
+          type: "string"
+          description: "Catalogue of available conflict-free resort and casino activities"
+  on_exit: ->
+    transition to @generator.createItinerary
+
+
+# -- PHASE 3: ITINERARY GENERATION --------------------------------------------
+
+generator createItinerary:
+  description: "Generates a personalised resort itinerary using all gathered context."
+  label: "Create Itinerary"
+  llm: @llm.openai_gpt4o
+  system:
+    instructions: |
+      You are a luxury resort concierge generating a personalized day-by-day itinerary. Produce a well-structured, friendly itinerary that:
+
+      1. Opens with a short welcome personalised to the guest's tier and interests.
+      2. Lists recommended activities day by day, each with a time slot, activity name, and one-sentence description.
+      3. Prioritizes activities that align with the guest's interests: {!@subagent.guestContext.output.interests_summary}
+      4. Highlights applicable personalized offers: {!@subagent.itineraryBuilder.output.eligible_offers}
+      5. Respects all schedule constraints — never schedule over: {!@subagent.itineraryBuilder.output.schedule_constraints}
+      6. Closes with a note on how to book highlighted activities.
+
+      Use only activities from the available offerings list. Do not invent activities.
+      Format the output as plain text suitable for direct delivery to the guest.
+  prompt: ->
+    | Create a personalized resort itinerary for this guest.
+    | Stay details: {!@subagent.resolveGuest.output.stay_summary}
+    | Guest tier: {!@subagent.guestContext.output.guest_tier}
+    | Interests: {!@subagent.guestContext.output.interests_summary}
+    | Available activities: {!@subagent.itineraryBuilder.output.available_offerings}
+    | Eligible offers: {!@subagent.itineraryBuilder.output.eligible_offers}
+    | Schedule constraints (do not conflict): {!@subagent.itineraryBuilder.output.schedule_constraints}
+  on_exit: ->
+    transition to @echo.itineraryResponse
+
+
+# -- RESPONSE -----------------------------------------------------------------
+
+echo itineraryResponse:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_COMPLETED"
+  message: a2a.message({messageId: uuid(), parts: [a2a.textPart(@generator.createItinerary.output)]})
+
+echo fallbackResponse:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_FAILED"
+  message: a2a.message({messageId: uuid(), parts: [a2a.textPart("I wasn't able to retrieve your reservation details. Please provide your player ID or reservation confirmation code and try again.")]})
