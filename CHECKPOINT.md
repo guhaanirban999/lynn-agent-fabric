@@ -1,6 +1,33 @@
 # Lynn Agent Fabric demo — CHECKPOINT (resume here)
 
-_Last updated: 2026-08-16. Fictional "Lynn Las Vegas" resort+casino Agent Fabric demo._
+_Last updated: 2026-08-18. Fictional "Lynn Las Vegas" resort+casino Agent Fabric demo._
+
+## ✅ COMPLETE — DEMO-READY (2026-08-18)
+The native Agent Fabric itinerary agent is **built, deployed, tested, fixed, and demo-ready.**
+End-to-end verified: **happy path 100%, confirmation code 100%, no `-32602`, no graph crashes,
+age-gate fail-closed, 0 governance leaks.** Full write-up: **`docs/LYNN-ITINERARY-AGENT-TEST-REPORT.md`**.
+
+- **Broker URL (paste into `agent-broker-ui`):** `https://lynn-demo-gw-0m6hw6.5sc6y6-1.usa-e2.cloudhub.io/lynn_itinerary_agent/`
+  (agent card at `…/.well-known/agent-card.json`; A2A needs header `A2A-Version: 1.0` + method `SendMessage`).
+- **Demo prompt:** "Create a personalized resort itinerary for my stay. My reservation confirmation is
+  LYNN-ALEX01. Include dining, entertainment, and any offers I'm eligible for." (or player id `LR-100002`).
+- **What it shows:** Alex Carter (Black tier) · family-aware (minor in party) · $500 BLKDINE + 2-for-1 Le Rêve
+  offers · pre-booked SW Steakhouse respected · **21+ gaming suppressed** (fail-closed governance).
+- **Three fixes applied & deployed** (see report §10–§13):
+  1. Graph (`lynn-itinerary-agent/brokers/lynn-itinerary-agent.agent`, deployed ver `ed424534`) — front-loaded
+     `resolveGuest` (getReservation first → resolves confirmation codes) + `identityRouter`→`fallbackResponse`
+     + loop caps 5→8.
+  2. `lynn-casino-gaming` — nullable tool-param schemas (`["string","null"]`) + `""→null` normalization → kills
+     the `-32602` "null found, string expected" errors.
+  3. `lynn-casino-gaming` — age-gate hardened **fail-closed** (suppress age-restricted offers when party
+     composition unknown).
+- **All pushed to GitHub** (`guhaanirban999`): `lynn-casino-gaming` (`95315b2`), `lynn-agent-fabric`
+  (report + `lynn-itinerary-agent/` broker code, `f1e2eb6`), `lynn-resort-systems` & `lynn-interests` in sync.
+- **Remaining (optional):** P2 governance polish (Flex/Omni Gateway OAuth2, Exchange/Agent Registry, Agent
+  Visualizer). Known infra note: `lynn-demo-gw` is a **shared-space managed Flex Gateway** — its raw logs are
+  NOT API-accessible; use API Manager Analytics / Anypoint Monitoring (UI) if needed.
+
+_(Everything below is earlier-phase history, kept for context.)_
 
 ## ⚠️ REDESIGN (v2, 2026-08-16) — Casino Itinerary backlog
 The demo was re-scoped to the **Casino Itinerary** backlog: **3 governed MCPs**
@@ -56,12 +83,12 @@ User → agent-broker-ui (Railway) → Lynn Concierge broker (CloudHub, Agent Fa
 | Piece | State |
 |---|---|
 | Aiven MySQL `lynn_demo` (8 tables + seed) | ✅ live; reset to baseline (`lynn-demo-db/03_reset_demo.sql`) |
-| `lynn-resort-systems` Mule app (REST+MCP) | ✅ built, tested, GitHub, **deployed to CloudHub** |
-| `lynn-casino-gaming` Mule app (REST+MCP) | ✅ built, tested 14/14, GitHub, **deployed to CloudHub** |
-| Concierge broker scaffold | ✅ in `lynn-concierge-broker/` (needs agent URLs, then deploy) |
-| **3 Langflow agents** | ⬜ **NEXT — build these** |
-| Wire broker `exchange.json` + deploy broker | ⬜ after agent URLs |
-| Point `agent-broker-ui` at broker + end-to-end demo | ⬜ last |
+| 3 MCP servers (resort / interests / casino) | ✅ built, tested, GitHub, deployed to CloudHub (casino_demo) |
+| `lynn-casino-gaming` null-param + fail-closed fixes | ✅ deployed + pushed (`95315b2`) |
+| **Native Agent Fabric itinerary agent** (`lynn-itinerary-network`) | ✅ **built, deployed (ver `ed424534`), fixed, verified 100%** |
+| A2A broker endpoint + demo | ✅ **live & demo-ready** (URL above; report §13) |
+| Broker code + test report on GitHub | ✅ pushed to `lynn-agent-fabric` (`f1e2eb6`) |
+| P2 governance polish (Gateway OAuth2, Exchange/Registry, Visualizer) | ⬜ optional follow-up |
 
 ## Key URLs
 - Resort MCP: `https://lynn-resort-systems-esulje.rajrd4-1.usa-e1.cloudhub.io/mcp`
